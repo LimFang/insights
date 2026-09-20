@@ -410,6 +410,10 @@ def export(conninfo, name=RUN_NAME, output_dir='data/export/pilot'):
         jobs_total = cur.fetchone()[0]
         cur.execute('SELECT status, count(*) FROM jobs WHERE "group" LIKE \'pilot:%%\' GROUP BY status')
         jobs_by_status = {r[0]: r[1] for r in cur.fetchall()}
+        cur.execute(
+            'SELECT split_part("group", \':\', 2), count(*) FROM jobs WHERE "group" LIKE \'pilot:%%\' GROUP BY 1'
+        )
+        slices_submitted = {r[0]: r[1] for r in cur.fetchall()}
     conn.close()
 
     summary = {
@@ -436,14 +440,30 @@ def export(conninfo, name=RUN_NAME, output_dir='data/export/pilot'):
     for agent in AGENTS:
         cand = candidate_stats.get(agent, {'candidates': 0, 'qualified': 0})
         achieved = selected_stats.get(agent, 0)
-        summary['agents'][agent] = {
+        submitted = slices_submitted.get(agent, 0)
+        slices_total = len(DAYS) * SLICES_PER_DAY
+        exhausted = submitted >= slices_total
+        entry = {
             'candidates': cand['candidates'],
             'qualified': cand['qualified'],
             'selected': achieved,
             'target': TARGET_PER_AGENT,
             'shortfall': max(0, TARGET_PER_AGENT - achieved),
             'retention_rate': (cand['qualified'] / cand['candidates']) if cand['candidates'] else None,
+            'slices_submitted': submitted,
+            'slices_total': slices_total,
+            'slices_exhausted': exhausted,
         }
+        if achieved < TARGET_PER_AGENT:
+            entry['shortfall_reason'] = (
+                f'all {slices_total} ten-minute slices in the window were submitted and processed, '
+                f'and only {cand["qualified"]} candidates out of {cand["candidates"]} survived the '
+                f'PUBLIC + stargazerCount>500 + native-label filters; the window cannot supply '
+                f'{TARGET_PER_AGENT} qualifying PRs for this agent'
+                if exhausted else
+                f'only {submitted} of {slices_total} slices were submitted before the scheduler stopped'
+            )
+        summary['agents'][agent] = entry
     summary_path = os.path.join(output_dir, 'pilot_summary.json')
     with open(summary_path, 'w', encoding='utf-8') as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
