@@ -15,4 +15,5 @@ class Repository:
     forks: int
     
     primary_language: str
+    visibility: str
     

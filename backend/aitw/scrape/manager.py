@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import time
 import click
+from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
 from aitw.database.connection import connect
@@ -76,11 +77,10 @@ def update(db_conninfo):
     
 
 def backfill(db_conninfo):
-    # 2025-05-15 00:00:00 UTC
-    start = datetime(2025, 5, 15, 0, 0, 0,0, timezone.utc).astimezone()
-    end = datetime.now().astimezone()
+    end = datetime(2026, 9, 15, 0, 0, 0, tzinfo=timezone.utc).astimezone()
+    start = end - relativedelta(months=9)
 
-    sliced = slice(start, end, 60)
+    sliced = slice(start, end, 600)
 
     job_manager = JobManager(db_conninfo)
     job_manager.delete_all("backfill")

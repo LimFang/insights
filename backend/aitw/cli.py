@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 import click
@@ -7,6 +8,9 @@ import aitw.scrape.worker as scrape_worker
 import aitw.scrape.manager as scrape_manager
 import aitw.archive.archive as archive_file
 import aitw.scrape.pr_classifier as pr_classifier
+import aitw.scrape.export as export_file
+import aitw.database.schema as schema_file
+import aitw.scrape.pilot as pilot_file
 
 import dotenv
 dotenv.load_dotenv(override=True)
@@ -93,6 +97,61 @@ def upload(db, token, files):
 @click.option('--db', envvar='POSTGRES_CONNECT_BACKEND', required=True)
 def reclassify(db):
     pr_classifier.reclassify(db)
+
+@cli.command('init-db')
+@click.option('--db', envvar='POSTGRES_CONNECT_BACKEND', required=True)
+def init_db(db):
+    schema_file.init_schema(db)
+
+@cli.command()
+@click.option('--db', envvar='POSTGRES_CONNECT_BACKEND', required=True)
+@click.option('--output', '-o', default='./export/filtered_prs.csv', type=click.Path())
+@click.option('--months', default=9, show_default=True)
+@click.option('--min-stars', default=500, show_default=True)
+def export(db, output, months, min_stars):
+    export_file.export_filtered(db, output, months, min_stars)
+
+@cli.group()
+def pilot():
+    pass
+
+@pilot.command()
+@click.option('--db', envvar='POSTGRES_CONNECT_BACKEND', required=True)
+@click.option('--name', default=pilot_file.RUN_NAME, show_default=True)
+def prepare(db, name):
+    run_id = pilot_file.ensure_run(db, name)
+    click.echo(f'✅ Pilot run {name} ready (id={run_id})')
+
+@pilot.command()
+@click.option('--db', envvar='POSTGRES_CONNECT_BACKEND', required=True)
+@click.option('--name', default=pilot_file.RUN_NAME, show_default=True)
+@click.option('--batch', default=10, show_default=True)
+@click.option('--poll', default=5, show_default=True)
+@click.option('--max-queue', default=15, show_default=True)
+def run(db, name, batch, poll, max_queue):
+    achieved = pilot_file.run(db, name, batch=batch, poll=poll, max_queue=max_queue)
+    click.echo(f'🏁 Pilot finished: {achieved}')
+
+@pilot.command()
+@click.option('--db', envvar='POSTGRES_CONNECT_BACKEND', required=True)
+@click.option('--name', default=pilot_file.RUN_NAME, show_default=True)
+def status(db, name):
+    pilot_file.status(db, name)
+
+@pilot.command()
+@click.option('--db', envvar='POSTGRES_CONNECT_BACKEND', required=True)
+@click.option('--name', default=pilot_file.RUN_NAME, show_default=True)
+def finalize(db, name):
+    achieved = pilot_file.finalize(db, name)
+    click.echo(f'🏁 Finalized: {achieved}')
+
+@pilot.command('export')
+@click.option('--db', envvar='POSTGRES_CONNECT_BACKEND', required=True)
+@click.option('--name', default=pilot_file.RUN_NAME, show_default=True)
+@click.option('--output', '-o', default='data/export/pilot', type=click.Path())
+def export_cmd(db, name, output):
+    summary = pilot_file.export(db, name, output)
+    click.echo(json.dumps(summary['agents'], indent=2, ensure_ascii=False))
 
 if __name__ == '__main__':
     cli()

@@ -143,13 +143,13 @@ class GitHubScraper:
                         commitsList = [
                             Commit(authors=[
                                 CommitAuthor(name=x['name'], email=x['email'])
-                                for x in n['commit']['authors']['nodes']
+                                for x in ((n['commit']['authors'] or {}).get('nodes') or []) if x is not None
                             ]) 
                             for n in item['commits']['nodes'] if n is not None
                         ],
                         files = [
                             PullRequestFile(additions=n['additions'], deletions=n['deletions'], path=n['path']) 
-                            for n in item['files']['nodes'] if n is not None
+                            for n in (item['files'].get('nodes') or []) if n is not None
                         ] if item['files'] is not None else None,
                         commentsList = [
                             Comment(
@@ -157,7 +157,7 @@ class GitHubScraper:
                                 created_at=n['createdAt'],
                                 author=Actor(login=n['author']['login'], type=n['author']['__typename']) if n['author'] is not None else None,
                                 body=n['bodyText']) 
-                            for n in item['comments']['nodes'] if n is not None
+                            for n in (item['comments'].get('nodes') or []) if n is not None
                         ] if item['comments'] is not None else None, 
                     )
                     
@@ -170,7 +170,8 @@ class GitHubScraper:
                             stargazers=item['baseRepository']['stargazerCount'],
                             watchers=item['baseRepository']['watchers']['totalCount'],
                             forks=item['baseRepository']['forkCount'],
-                            primary_language=item['baseRepository']['primaryLanguage'] and item['baseRepository']['primaryLanguage']['name']
+                            primary_language=item['baseRepository']['primaryLanguage'] and item['baseRepository']['primaryLanguage']['name'],
+                            visibility=item['baseRepository']['visibility']
                         )
                         
                     if item['headRepository']:
@@ -182,7 +183,8 @@ class GitHubScraper:
                             stargazers=item['headRepository']['stargazerCount'],
                             watchers=item['headRepository']['watchers']['totalCount'],
                             forks=item['headRepository']['forkCount'],
-                            primary_language=item['headRepository']['primaryLanguage'] and item['headRepository']['primaryLanguage']['name']
+                            primary_language=item['headRepository']['primaryLanguage'] and item['headRepository']['primaryLanguage']['name'],
+                            visibility=item['headRepository']['visibility']
                         )
 
                 if not items:
@@ -306,6 +308,7 @@ class GitHubScraper:
                             primaryLanguage {{
                               name
                             }}
+                            visibility
                         }}
                         
                         headRefName
@@ -322,6 +325,7 @@ class GitHubScraper:
                             primaryLanguage {{
                               name
                             }}
+                            visibility
                         }}
                     }}
                 }}

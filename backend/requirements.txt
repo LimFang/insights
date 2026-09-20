@@ -13,3 +13,4 @@ ruff
 mypy
 dacite
 google-genai
+python-dateutil
